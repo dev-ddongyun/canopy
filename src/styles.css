@@ -2,9 +2,9 @@
 
 html[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0e0f12;
-  --panel: #16181d;
-  --panel2: #1c1f26;
+  --bg: #141414;
+  --panel: #1c1c1c;
+  --panel2: #242424;
   --border: #262932;
   --text: #e6e7eb;
   --muted: #8a8f9c;
