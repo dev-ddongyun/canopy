@@ -1,10 +1,9 @@
-export type Card = { text: string; link: string | null };
+export type Card = { text: string };
 export type Column = { name: string; cards: Card[] };
 export type Board = { columns: Column[]; rawHeader: string; rawFooter: string };
 
 const FRONTMATTER_RE = /^(---\n[\s\S]*?\n---\n)/;
 const SETTINGS_RE = /(\n*%% kanban:settings\n[\s\S]*?\n%%\s*)$/;
-const LINK_RE = /^\[\[([^\]]+)\]\]$/;
 
 export function parse(md: string): Board {
   let rest = md;
@@ -36,15 +35,7 @@ export function parse(md: string): Board {
     }
     const cardMatch = /^- \[[ xX]\] (.+)$/.exec(line);
     if (cardMatch && cur) {
-      const text = cardMatch[1].trim();
-      const linkMatch = LINK_RE.exec(text);
-      let link: string | null = null;
-      if (linkMatch) {
-        const inner = linkMatch[1];
-        const pipeIdx = inner.indexOf("|");
-        link = pipeIdx >= 0 ? inner.slice(0, pipeIdx) : inner;
-      }
-      cur.cards.push({ text, link });
+      cur.cards.push({ text: cardMatch[1].trim() });
     }
   }
 
@@ -74,10 +65,4 @@ export function serialize(b: Board): string {
     if (!out.endsWith("\n")) out += "\n";
   }
   return out;
-}
-
-export function isKanbanFile(md: string): boolean {
-  const fm = md.match(FRONTMATTER_RE);
-  if (!fm) return false;
-  return /kanban-plugin:\s*(basic|board)/.test(fm[1]);
 }

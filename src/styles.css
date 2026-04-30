@@ -49,27 +49,16 @@ html, body, #root {
   font-size: 13px;
 }
 
-.empty-state {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 5rem 1.5rem;
-  text-align: center;
+.empty-pick {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 1.5rem;
 }
-.empty-state h1 {
-  margin: 0 0 0.5rem;
-  font-size: 1.75rem;
-  letter-spacing: -0.02em;
-}
-.empty-state p { margin: 0.5rem 0 1.5rem; }
-.empty-state .muted { color: var(--muted); }
-.empty-state .small { font-size: 12px; }
-.empty-state code {
-  background: var(--panel2);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 12px;
-}
-.empty-state > button {
+.empty-pick > button {
   padding: 10px 24px;
   background: var(--accent);
   color: var(--accent-fg);
@@ -80,32 +69,7 @@ html, body, #root {
   font-family: inherit;
   font-size: 13px;
 }
-.empty-state > button:disabled { opacity: 0.4; cursor: not-allowed; }
-.empty-state .theme-row { margin-top: 2rem; }
-
-.theme-row {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-.theme-opt {
-  flex: 1;
-  padding: 8px 14px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-}
-.theme-opt:hover { border-color: var(--accent); }
-.theme-opt.active {
-  background: var(--accent);
-  color: var(--accent-fg);
-  border-color: var(--accent);
-  font-weight: 600;
-}
+.empty-pick > button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .board {
   display: flex;
@@ -211,27 +175,20 @@ html, body, #root {
 .columns {
   flex: 1;
   display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 12px;
-  overflow-x: auto;
-  align-items: flex-start;
-}
-.columns::before,
-.columns::after {
-  content: "";
-  flex: 1;
-  min-width: 0;
+  overflow-y: auto;
+  align-items: stretch;
 }
 
 .column {
-  flex: 0 0 280px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 80px);
 }
 .column-name {
   padding: 4px 6px 8px;
@@ -262,8 +219,6 @@ html, body, #root {
   transition: opacity 0.12s, transform 0.12s;
 }
 .card:active { cursor: grabbing; }
-.card.has-link { color: var(--accent); cursor: pointer; }
-.card.has-link:hover { border-color: var(--accent); }
 .card.dragging {
   opacity: 0.35;
   transform: scale(0.98);

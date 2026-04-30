@@ -2,28 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import type { Board as BoardData, Card } from "../kanban";
 import type { Config } from "./main";
 
-const LINK_RE = /^\[\[([^\]]+)\]\]$/;
-
-function displayText(text: string): string {
-  const m = LINK_RE.exec(text);
-  if (!m) return text;
-  const inner = m[1];
-  const pipeIdx = inner.indexOf("|");
-  if (pipeIdx >= 0) return inner.slice(pipeIdx + 1);
-  const slashIdx = inner.lastIndexOf("/");
-  return slashIdx >= 0 ? inner.slice(slashIdx + 1) : inner;
-}
-
 type Theme = "light" | "dark" | "system";
-
-type Props = {
-  name: string;
-  isHome?: boolean;
-  config: Config;
-  onNavigate: (to: string) => void;
-  onPickFile: () => Promise<void>;
-  onSetTheme: (t: Theme) => Promise<void>;
-};
 
 function themeIcon(t: Theme): string {
   return t === "light" ? "☀" : t === "dark" ? "☾" : "◐";
@@ -84,14 +63,68 @@ function ThemeMenu({
   );
 }
 
+export function Header({
+  title,
+  homeFile,
+  config,
+  onPickFile,
+  onSetTheme,
+}: {
+  title?: string;
+  homeFile: string;
+  config: Config;
+  onPickFile: () => void;
+  onSetTheme: (t: Theme) => void;
+}) {
+  return (
+    <header className="board-header">
+      <div className="board-header-inner">
+        <h1 className="hdr-title" title={title || ""}>
+          {title || ""}
+        </h1>
+        <div className="hdr-right">
+          <ThemeMenu current={config.theme} onPick={onSetTheme} />
+          <button
+            className="icon-btn"
+            title={homeFile ? `파일 변경 — ${homeFile}` : "파일 선택"}
+            onClick={onPickFile}
+            disabled={config.platform !== "darwin"}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+              <path d="M14 3v5h5" fill="none" stroke="var(--panel)" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+type Props = {
+  title: string;
+  config: Config;
+  homeFile: string;
+  onPickFile: () => Promise<void>;
+  onSetTheme: (t: Theme) => Promise<void>;
+};
+
 type DragInfo = { col: number; idx: number } | null;
 type DropTarget = { col: number; idx: number } | null;
 
 export function Board({
-  name,
-  isHome,
+  title,
   config,
-  onNavigate,
+  homeFile,
   onPickFile,
   onSetTheme,
 }: Props) {
@@ -102,7 +135,7 @@ export function Board({
   const [dropTarget, setDropTarget] = useState<DropTarget>(null);
 
   const load = useCallback(async () => {
-    const r = await fetch(`/api/board/${encodeURIComponent(name)}`);
+    const r = await fetch(`/api/board?home=${encodeURIComponent(homeFile)}`);
     if (!r.ok) {
       setError(`로드 실패 ${r.status}`);
       return;
@@ -111,32 +144,32 @@ export function Board({
     setBoard(d.board);
     setMtime(d.mtime);
     setError(null);
-  }, [name]);
+  }, [homeFile]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    const es = new EventSource("/api/events");
-    es.onmessage = (e) => {
-      try {
-        const { name: changed } = JSON.parse(e.data);
-        if (changed === name) load();
-      } catch {}
-    };
+    const es = new EventSource(
+      `/api/events?home=${encodeURIComponent(homeFile)}`,
+    );
+    es.onmessage = () => load();
     return () => es.close();
-  }, [name, load]);
+  }, [homeFile, load]);
 
   const save = async (next: BoardData) => {
     const prev = board;
     const prevMtime = mtime;
     setBoard(next);
-    const r = await fetch(`/api/board/${encodeURIComponent(name)}`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ board: next, mtime: prevMtime }),
-    });
+    const r = await fetch(
+      `/api/board?home=${encodeURIComponent(homeFile)}`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ board: next, mtime: prevMtime }),
+      },
+    );
     if (!r.ok) {
       if (r.status === 409) {
         await load();
@@ -194,26 +227,16 @@ export function Board({
     if (!drag) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    if (
-      !dropTarget ||
-      dropTarget.col !== col
-    ) {
+    if (!dropTarget || dropTarget.col !== col) {
       setDropTarget({ col, idx: cardCount });
     }
   };
 
   const addCard = (colIdx: number) => {
     if (!board) return;
-    const text = window.prompt("카드 내용 (예: [[보드이름]] 또는 텍스트)");
+    const text = window.prompt("카드 내용");
     if (!text) return;
-    const trimmed = text.trim();
-    const m = LINK_RE.exec(trimmed);
-    let link: string | null = null;
-    if (m) {
-      const pipe = m[1].indexOf("|");
-      link = pipe >= 0 ? m[1].slice(0, pipe) : m[1];
-    }
-    const card: Card = { text: trimmed, link };
+    const card: Card = { text: text.trim() };
     const next: BoardData = {
       ...board,
       columns: board.columns.map((c, i) =>
@@ -237,103 +260,81 @@ export function Board({
     save(next);
   };
 
-  if (error) return <div className="error">{error}</div>;
-  if (!board) return <div className="loading">로딩중…</div>;
-
   return (
     <div className="board">
-      <header className="board-header">
-        <div className="board-header-inner">
-          <h1 className="hdr-title" title={name}>
-            {name}
-          </h1>
-          <div className="hdr-right">
-            <ThemeMenu current={config.theme} onPick={onSetTheme} />
-            {isHome && (
-              <button
-                className="icon-btn"
-                title={`파일 변경 — ${config.homeFile}`}
-                onClick={onPickFile}
-                disabled={config.platform !== "darwin"}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-                </svg>
+      <Header
+        title={title}
+        homeFile={homeFile}
+        config={config}
+        onPickFile={() => {
+          onPickFile().catch(() => {});
+        }}
+        onSetTheme={onSetTheme}
+      />
+      {error ? (
+        <div className="error">{error}</div>
+      ) : !board ? (
+        <div className="loading">로딩중…</div>
+      ) : (
+        <div className="columns">
+          {board.columns.map((col, ci) => (
+            <div
+              key={ci}
+              className="column"
+              onDragOver={(e) => onColumnDragOver(e, ci, col.cards.length)}
+              onDrop={(e) => {
+                e.preventDefault();
+                commitDrop();
+              }}
+            >
+              <div className="column-name">{col.name}</div>
+              <div className="cards">
+                {col.cards.map((card, idx) => {
+                  const showBefore =
+                    dropTarget?.col === ci && dropTarget.idx === idx;
+                  const isDragging = drag?.col === ci && drag.idx === idx;
+                  return (
+                    <React.Fragment key={idx}>
+                      {showBefore && <div className="drop-indicator" />}
+                      <div
+                        className={`card${isDragging ? " dragging" : ""}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          setDrag({ col: ci, idx });
+                        }}
+                        onDragEnd={() => {
+                          setDrag(null);
+                          setDropTarget(null);
+                        }}
+                        onDragOver={(e) => onCardDragOver(e, ci, idx)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          commitDrop();
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          removeCard(ci, idx);
+                        }}
+                      >
+                        {card.text}
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+                {dropTarget?.col === ci &&
+                  dropTarget.idx === col.cards.length && (
+                    <div className="drop-indicator" />
+                  )}
+              </div>
+              <button className="add-card" onClick={() => addCard(ci)}>
+                + 카드
               </button>
-            )}
-          </div>
-        </div>
-      </header>
-      <div className="columns">
-        {board.columns.map((col, ci) => (
-          <div
-            key={ci}
-            className="column"
-            onDragOver={(e) => onColumnDragOver(e, ci, col.cards.length)}
-            onDrop={(e) => {
-              e.preventDefault();
-              commitDrop();
-            }}
-          >
-            <div className="column-name">{col.name}</div>
-            <div className="cards">
-              {col.cards.map((card, idx) => {
-                const showBefore =
-                  dropTarget?.col === ci && dropTarget.idx === idx;
-                const isDragging = drag?.col === ci && drag.idx === idx;
-                return (
-                  <React.Fragment key={idx}>
-                    {showBefore && <div className="drop-indicator" />}
-                    <div
-                      className={`card${card.link ? " has-link" : ""}${isDragging ? " dragging" : ""}`}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        setDrag({ col: ci, idx });
-                      }}
-                      onDragEnd={() => {
-                        setDrag(null);
-                        setDropTarget(null);
-                      }}
-                      onDragOver={(e) => onCardDragOver(e, ci, idx)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        commitDrop();
-                      }}
-                      onClick={() => {
-                        if (card.link) onNavigate(`/${card.link}`);
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        removeCard(ci, idx);
-                      }}
-                    >
-                      {displayText(card.text)}
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-              {dropTarget?.col === ci &&
-                dropTarget.idx === col.cards.length && (
-                  <div className="drop-indicator" />
-                )}
             </div>
-            <button className="add-card" onClick={() => addCard(ci)}>
-              + 카드
-            </button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
